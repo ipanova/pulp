@@ -91,9 +91,9 @@ class RepositoryAPI(PulpAPI):
         }
         return self.server.POST(path, repo_data)
 
-    def repository(self, id):
+    def repository(self, id, query_parameters=()):
         path = self.base_path + ("%s/" % id)
-        return self.server.GET(path)
+        return self.server.GET(path, query_parameters)
 
     def delete(self, id):
         path = self.base_path + "%s/" % id

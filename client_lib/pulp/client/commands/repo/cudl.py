@@ -304,6 +304,9 @@ class ListRepositoriesCommand(PulpCliCommand):
               'only the given fields will displayed')
         self.add_option(PulpCliOption('--fields', d, required=False))
 
+        d = _('if specified, configuration information is displayed for one repository')
+        self.add_option(PulpCliOption('--repo-id', d, required=False))
+
         self.supports_all = include_all_flag
         if self.supports_all:
             d = _('if specified, information on all Pulp repositories, '
@@ -317,13 +320,19 @@ class ListRepositoriesCommand(PulpCliCommand):
 
         if kwargs['summary'] and kwargs['details']:
             msg = _('The summary and details views cannot be used together')
-            self.prompt.render_error_message(msg)
+            self.prompt.render_failure_message(msg)
             return
 
-        if kwargs['summary']:
+        if kwargs['summary'] and kwargs['repo-id']:
+            self.display_repository_summary(**kwargs)
+
+        elif kwargs['summary']:
             self.display_repository_summaries(**kwargs)
             if kwargs.get('all', False):
                 self.display_other_repository_summaries(**kwargs)
+
+        elif kwargs['repo-id']:
+            self.display_repository(**kwargs)
 
         else:
             self.display_repositories(**kwargs)
@@ -353,9 +362,34 @@ class ListRepositoriesCommand(PulpCliCommand):
             if 'id' not in filters:
                 filters.append('id')
             order = ['id']
-
         repo_list = self.get_repositories(query_params, **kwargs)
         self.prompt.render_document_list(repo_list, filters=filters, order=order)
+
+    def display_repository(self, **kwargs):
+        """
+        Default formatting for displaying the repository returned from the
+        get_repository method. This call may be overridden to customize
+        the repository list appearance.
+        """
+        self.prompt.render_title(self.repos_title)
+
+        # Default flags to render_document_list
+        filters = ['id', 'display_name', 'description', 'content_unit_counts']
+        order = filters
+
+        query_params = {}
+        if kwargs['details']:
+            filters.append('notes')
+            for p in ('importers', 'distributors'):
+                query_params[p] = True
+                filters.append(p)
+        elif kwargs['fields'] is not None:
+            filters = kwargs['fields'].split(',')
+            if 'id' not in filters:
+                filters.append('id')
+            order = ['id']
+        repo_list = self.get_repository(kwargs['repo-id'], query_params, **kwargs)
+        self.prompt.render_document(repo_list, filters=filters, order=order)
 
     def display_other_repositories(self, **kwargs):
         """
@@ -378,6 +412,15 @@ class ListRepositoriesCommand(PulpCliCommand):
         the repository list appearance.
         """
         repo_list = self.get_repositories({}, **kwargs)
+        _default_summary_view(repo_list, self.prompt)
+
+    def display_repository_summary(self, **kwargs):
+        """
+        Default formatting for displaying the summary view of repository returned
+        from the get_repository method. This call may be overridden to customize
+        the repository list appearance.
+        """
+        repo_list = self.get_repository(kwargs['repo-id'], {}, **kwargs)
         _default_summary_view(repo_list, self.prompt)
 
     def display_other_repository_summaries(self, **kwargs):
@@ -417,6 +460,24 @@ class ListRepositoriesCommand(PulpCliCommand):
         :rtype:              list
         """
         repo_list = self.context.server.repo.repositories(query_params).response_body
+        return repo_list
+
+    def get_repository(self, repo_id, query_params, **kwargs):
+        """
+        Same as get_repositories() but for one specific repo.
+
+        :param query_params: a dict of tweaks to what data should be included in the repository.
+        :type  query_params: dict
+        :param kwargs:       all keyword args passed from the CLI framework into this
+                             command, including any that were added by a subclass
+        :type  kwargs:       dict
+
+        :return:             information of specified repository will be displayed;
+                             the format should be the same as what is returned from the server
+        :rtype:              dict
+        """
+
+        repo_list = self.context.server.repo.repository(repo_id, query_params).response_body
         return repo_list
 
     def get_other_repositories(self, query_params, **kwargs):
@@ -467,8 +528,8 @@ def _default_summary_view(repo_list, prompt):
     Default rendering for printing the summary view of a list of
     repositories.
 
-    :param repo_list: retrieved from either get_repositories or get_other_repositories
-    :type  repo_list: list
+    :param repo_list: retrieved from either get_repositories/y or get_other_repositories
+    :type  repo_list: list/dict
     """
 
     # The model being followed for this view is `yum repolist`. That command
@@ -477,12 +538,17 @@ def _default_summary_view(repo_list, prompt):
     # here).
 
     terminal_width = prompt.terminal_size()[0]
+    line_template = '%s  %s'
 
-    if repo_list:
+    if isinstance(repo_list, dict) and repo_list!={}:
+        id_value = repo_list['id'] + ' '
+        name_value = repo_list['display_name']
+        line = line_template % (id_value, name_value)
+        prompt.write(line, skip_wrap=True)
+
+    if isinstance(repo_list, list) and repo_list!= []:
         max_id_width = max(len(r['id']) for r in repo_list)
         max_name_width = terminal_width - max_id_width - 1  # -1 for space between columns
-
-        line_template = '%s  %s'
 
         for repo in repo_list:
             id_value = repo['id'] + ' ' * (max_id_width - len(repo['id']))
