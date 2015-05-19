@@ -63,6 +63,33 @@ def validate_feed_requirement(config):
         raise ValueError(msg)
 
 
+def validate_mirrorlist_requirement(config):
+    """
+    Ensures the mirrorlist URL is a string if specified.
+
+    This validation does not check the integrity of the mirrorlist URL.
+    """
+
+    mirrorlist = config.get(importer_constants.KEY_MIRRORLIST)
+    if mirrorlist and not isinstance(mirrorlist, basestring):
+        msg = _('<%(mirrorlist)s> must be a string.')
+        msg = msg % {'mirrorlist': importer_constants.KEY_MIRRORLIST}
+        raise ValueError(msg)
+
+
+def validate_feed_and_mirrorlist(config):
+    """
+    Ensures that either  feed or mirrorlist is specified.
+    """
+
+    feed_url = config.get(importer_constants.KEY_FEED)
+    mirrorlist = config.get(importer_constants.KEY_MIRRORLIST)
+    if feed_url and mirrorlist:
+        msg = _('Feed and mirrorlist options cannot be used together, '
+                'please specify either feed or mirrorlist')
+        raise ValueError(msg)
+
+
 def validate_ssl_validation_flag(config):
     """
     Make sure the SSL validation enabled flag is a boolean.
@@ -411,6 +438,8 @@ def _run_validate_is_non_required_bool(config, setting_name):
 
 VALIDATIONS = (
     validate_feed_requirement,
+    validate_mirrorlist_requirement,
+    validate_feed_and_mirrorlist,
     validate_ssl_validation_flag,
     validate_ssl_ca_cert,
     validate_ssl_client_cert,

@@ -20,6 +20,7 @@ docstring for more information.
 
 # Location of the external source to sync
 KEY_FEED = 'feed'
+KEY_MIRRORLIST = 'mirrorlist'
 
 # Boolean indicating if the synchronized units should be verified by size and checksum
 KEY_VALIDATE = 'validate'
